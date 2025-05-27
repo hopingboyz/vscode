@@ -1,68 +1,51 @@
-# Use the official code-server base with Ubuntu
-FROM codercom/code-server:latest
+# Use official Ubuntu 22.04 base image
+FROM ubuntu:22.04
 
-# Switch to root for system configuration
-USER root
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install essential system tools and dependencies
-RUN apt-get update && \
-    apt-get install -y \
-    sudo \
-    curl \
-    wget \
-    git \
+# Update and install system dependencies
+RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
+    python3-dev \
     build-essential \
-    gnupg2 \
-    software-properties-common \
-    apt-transport-https \
-    ca-certificates \
-    lsb-release \
-    openssh-server \
-    net-tools \
-    iputils-ping \
-    dnsutils \
-    && apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    git \
+    curl \
+    vim \
+    sudo \
+    locales \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Docker CLI (Docker-in-Docker setup)
-RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
-    apt-get update && \
-    apt-get install -y docker-ce-cli && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Set UTF-8 locale
+RUN locale-gen en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
 
-# Create a root user with password (change 'rootpass' to your desired password)
-RUN echo 'root:rootpass' | chpasswd && \
-    usermod -aG sudo coder && \
-    echo 'coder ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+# Install Jupyter and data science packages
+RUN pip3 install --no-cache-dir \
+    notebook \
+    jupyterlab \
+    numpy \
+    pandas \
+    matplotlib \
+    seaborn \
+    scikit-learn \
+    scipy \
+    ipywidgets \
+    tqdm \
+    requests \
+    plotly \
+    sympy
 
-# Install essential VS Code extensions
-RUN code-server --install-extension ms-python.python && \
-    code-server --install-extension eamodio.gitlens && \
-    code-server --install-extension ms-azuretools.vscode-docker && \
-    code-server --install-extension vscodevim.vim && \
-    code-server --install-extension esbenp.prettier-vscode && \
-    code-server --install-extension ms-vscode-remote.remote-containers
+# Create a persistent working directory inside the container
+RUN mkdir -p /root/notebooks
+WORKDIR /root/notebooks
 
-# Configure workspace and permissions
-WORKDIR /workspace
-RUN chown -R coder:coder /workspace && \
-    chmod -R 755 /workspace
+# Expose Jupyter port
+EXPOSE 8888
 
-# Switch back to coder user for security (use 'su root' when needed)
-USER coder
-
-# Set environment variables
-ENV SHELL=/bin/bash
-ENV PASSWORD=yoursecurepassword  # Change this or override with -e when running
-
-# Expose ports: code-server + SSH (optional)
-EXPOSE 8080 2222
-
-# Start script to handle both code-server and SSH
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN sudo chmod +x /usr/local/bin/entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+# Start Jupyter Notebook as root without token/password
+CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.password=''"]
